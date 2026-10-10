@@ -299,6 +299,7 @@ class DiPACE:
             self.feature_weights_list[index] = weight
 
         self.feature_weights_list = torch.from_numpy(self.feature_weights_list).float()
+        return self.feature_weights_list
     
     def plot_loss_curve(self, y_values, ylabel, perturbation_points, iterations_list):
         """
