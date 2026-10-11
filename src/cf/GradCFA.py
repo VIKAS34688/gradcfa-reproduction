@@ -315,6 +315,7 @@ class DiPACE_FA:
 
         ranked_features = [feature for feature, _ in importance_ranking]
         ranked_importance = [importance for _, importance in importance_ranking]
+        self.importance_ranking = importance_ranking
 
         query_out = self.model_interface.predict(query_instance)
         query_out = torch.round(query_out).detach().cpu().numpy()
