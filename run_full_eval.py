@@ -1,0 +1,232 @@
+"""
+Full test-set evaluation of GradCFA (DiPACE_FA) on the Credit Approval dataset.
+
+Run from the repository root (the folder containing `src`, `datasets` and `pytorch_model.pth`):
+
+    python run_full_eval.py --config A --seeds 42 --limit 3     # quick test (3 queries)
+    python run_full_eval.py --config A --seeds 42 43 44         # full run, 3 seeds
+    python run_full_eval.py --config A --summarize              # print mean +/- std table
+
+Design choices (document these in your report):
+  * The black-box model is NOT retrained. It is loaded from `pytorch_model.pth`, which the
+    notebook created with SEED = 42. Only the counterfactual generation uses the other seeds.
+  * Queries = every test-set row (20% split, random_state=42) that the model predicts as class 0
+    (rejected). The target class is 1 (approved).
+  * Each query gets its own seed (seed * 1000 + row_id), so a resumed run gives the same results.
+  * Plausibility is reported two ways: the repo's raw k-NN distance, and the paper's Eq. 5
+    (distances scaled by the min and max among the k nearest points). k = 3 (repo default;
+    the paper does not state k).
+  * Proximity, sparsity, diversity and confidence use the repo's own Evaluate class.
+"""
+import argparse
+import contextlib
+import io
+import os
+import random
+import sys
+import time
+import warnings
+
+warnings.filterwarnings("ignore")
+
+import matplotlib
+matplotlib.use("Agg")  # no pop-up windows, the GradCFA code calls plt.show()
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import torch
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+
+sys.path.append(os.path.abspath("src"))
+from arc.Binary_Architecture import Model
+from data.Data_Interface import DataInterface
+from model.Model_Interface import ModelInterface
+from cf.GradCFA import DiPACE_FA
+from eval.Evaluation import Evaluate
+
+MODEL_PATH = "pytorch_model.pth"
+EXPECTED_ACC = 0.8260869565217391   # test accuracy printed by the notebook with SEED = 42
+N_CF = 5
+K = 3
+RESULTS_DIR = "results"
+
+CAT_COLS = ['Gender', 'Married', 'BankCustomer', 'Industry', 'Ethnicity', 'PriorDefault',
+            'CreditScore', 'Employed', 'DriversLicense', 'Citizen']
+CONT_COLS = ['Age', 'Debt', 'YearsEmployed', 'Income']
+
+PAPER_HYPERPARAMS = dict(
+    proximity_weight=0.5, sparsity_weight=0.5, plausibility_weight=0.5, diversity_weight=0.5,
+    penalty_scale=0.1, perturb_scale=0.5,
+    proximity_threshold=0.2, sparsity_threshold=0.2,
+    plausibility_threshold=0.4, diversity_threshold=0.9,
+    high_loss_threshold=0.5, loss_converge_maxiter=2,
+)
+
+CONFIGS = {
+    "A": dict(PAPER_HYPERPARAMS),                              # the paper's Credit settings
+    "B": dict(high_loss_threshold=0.7),                        # repo defaults, as in the authors' notebook
+    # approximations of the paper's ablations (use later, Days 8-9)
+    "A_nopert": dict(PAPER_HYPERPARAMS, high_loss_threshold=1e9),   # perturbation never triggers
+    "A_nopen": dict(PAPER_HYPERPARAMS, penalty_scale=0.0),          # no additional penalty
+}
+
+PAPER_ROW = {"prox": 0.15, "spars": 0.18, "plaus_eq5_k3": 0.37, "div": 0.96, "conf": 0.78, "avg5": 0.81}
+
+
+def seed_all(s):
+    random.seed(s)
+    np.random.seed(s % (2 ** 32))
+    torch.manual_seed(s)
+
+
+def prepare():
+    """Rebuild the data pipeline exactly as in binary_notebook.ipynb and load the saved model."""
+    df = pd.read_csv("datasets/credit.csv").drop(columns="ZipCode")
+    for col in ["Industry", "Ethnicity", "Citizen"]:
+        df[col] = LabelEncoder().fit_transform(df[col])
+
+    X = df.drop(columns=["Approved"])
+    y = df["Approved"]
+    X = pd.get_dummies(X, columns=CAT_COLS)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    scaler = StandardScaler()
+    X_train_s = scaler.fit_transform(X_train)
+    X_test_s = scaler.transform(X_test)
+    X_all_s = scaler.transform(X)
+    input_size = X_train_s.shape[1]
+
+    model = Model(input_size)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+    model.eval()
+
+    with torch.no_grad():
+        acc = ((model(torch.tensor(X_test_s, dtype=torch.float32)) >= 0.5).float().view(-1)
+               == torch.tensor(y_test.values, dtype=torch.float32)).float().mean().item()
+        probs_all = model(torch.tensor(X_all_s, dtype=torch.float32)).view(-1)
+    pred_all = (probs_all >= 0.5).long().numpy()
+
+    d = DataInterface(dataframe=df, target="Approved", continuous_features=CONT_COLS)
+    m = ModelInterface(model_path=MODEL_PATH, input_size=input_size)
+    obs = torch.tensor(d.norm_encoded_features.to_numpy(), dtype=torch.float)
+
+    positions = X.index.get_indexer(X_test.index)
+    queries = []
+    for row_id, pos in zip(X_test.index, positions):
+        if pred_all[pos] == 0:
+            queries.append((int(row_id), df.loc[row_id].drop("Approved").to_list()))
+
+    print(f"Test rows: {len(X_test)} | predicted class 0 (queries): {len(queries)} | model test accuracy: {acc:.6f}")
+    if abs(acc - EXPECTED_ACC) > 1e-6:
+        print("WARNING: this model differs from the notebook model (expected accuracy "
+              f"{EXPECTED_ACC:.6f}). Re-run the notebook training cells and save pytorch_model.pth again.")
+    return dict(d=d, m=m, model=model, obs=obs, queries=queries)
+
+
+def plausibility(dist, k=K):
+    """dist: (n_cf, n_observed) L1 distances. Returns (raw k-NN distance, paper Eq. 5 value)."""
+    vals, _ = torch.topk(dist, k, largest=False)             # k nearest, ascending
+    raw = vals.mean().item()
+    dmin = vals.min(dim=1, keepdim=True).values
+    dmax = vals.max(dim=1, keepdim=True).values
+    eq5 = ((vals - dmin) / (dmax - dmin + 1e-8)).mean().item()
+    return raw, eq5
+
+
+def metrics_for(ctx, ev, q, cfs):
+    q = torch.Tensor(q).float()
+    c = torch.Tensor(cfs).float()
+    dist = torch.cdist(c, ctx["obs"], p=1.0)
+    raw, eq5 = plausibility(dist)
+    with torch.no_grad():
+        valid_frac = (ctx["model"](c).view(-1) >= 0.5).float().mean().item()
+    return dict(
+        prox=ev.evaluate_proximity(q, c).item(),
+        spars=ev.evaluate_sparsity(q, c).item(),
+        div=ev.evaluate_diversity(c).item(),
+        plaus_raw_k3=raw,
+        plaus_eq5_k3=eq5,
+        conf=ev.evaluate_confidence(c, desired_class=1).item(),
+        valid_frac=valid_frac,
+    )
+
+
+def run(config, seeds, limit):
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    ctx = prepare()
+    ev = Evaluate(ctx["d"], ctx["m"])
+    kwargs = CONFIGS[config]
+    out_csv = os.path.join(RESULTS_DIR, f"full_{config}.csv")
+    fa_csv = os.path.join(RESULTS_DIR, f"fa_{config}.csv")
+    err_txt = os.path.join(RESULTS_DIR, f"errors_{config}.txt")
+
+    done = set()
+    if os.path.exists(out_csv):
+        prev = pd.read_csv(out_csv)
+        done = set(zip(prev["seed"].astype(int), prev["row_id"].astype(int)))
+
+    queries = ctx["queries"][:limit] if limit else ctx["queries"]
+
+    for seed in seeds:
+        todo = [(rid, ql) for rid, ql in queries if (seed, rid) not in done]
+        print(f"\n[config {config}] seed {seed}: {len(todo)} queries to run ({len(queries) - len(todo)} already done)")
+        t_start = time.time()
+        for i, (rid, ql) in enumerate(todo, 1):
+            t0 = time.time()
+            try:
+                seed_all(seed * 1000 + rid)
+                exp = DiPACE_FA(ctx["d"], ctx["m"])
+                with contextlib.redirect_stdout(io.StringIO()):
+                    q, cfs = exp.generate_counterfactuals(ql, total_CFs=N_CF, **kwargs)
+                plt.close("all")
+                row = metrics_for(ctx, ev, q, cfs)
+                row.update(config=config, seed=seed, row_id=rid, seconds=round(time.time() - t0, 2))
+                pd.DataFrame([row]).to_csv(out_csv, mode="a", header=not os.path.exists(out_csv), index=False)
+
+                fa_rows = [dict(config=config, seed=seed, row_id=rid, feature=name, score=float(score))
+                           for name, score in exp.importance_ranking]
+                pd.DataFrame(fa_rows).to_csv(fa_csv, mode="a", header=not os.path.exists(fa_csv), index=False)
+            except Exception as e:  # keep a long run alive, but show the problem
+                plt.close("all")
+                msg = f"seed {seed} row {rid}: {type(e).__name__}: {e}"
+                print("ERROR", msg)
+                with open(err_txt, "a", encoding="utf-8") as f:
+                    f.write(msg + "\n")
+                continue
+
+            elapsed = time.time() - t_start
+            eta = elapsed / i * (len(todo) - i)
+            print(f"  [{i}/{len(todo)}] row {rid}  {time.time() - t0:5.1f}s   elapsed {elapsed / 60:5.1f} min   ETA {eta / 60:5.1f} min")
+    print("\nFinished. Results in", out_csv)
+
+
+def summarize(config):
+    path = os.path.join(RESULTS_DIR, f"full_{config}.csv")
+    df = pd.read_csv(path)
+    df["avg5"] = ((1 - df["prox"]) + (1 - df["spars"]) + (1 - df["plaus_eq5_k3"]) + df["div"] + df["conf"]) / 5
+    cols = ["prox", "spars", "plaus_eq5_k3", "plaus_raw_k3", "div", "conf", "valid_frac", "avg5", "seconds"]
+    per_seed = df.groupby("seed")[cols].mean()
+    n_per_seed = df.groupby("seed").size()
+    table = pd.DataFrame({"mean": per_seed.mean(), "std_across_seeds": per_seed.std(ddof=1)})
+    table["paper (GradCFA, Credit)"] = pd.Series(PAPER_ROW)
+    text = (f"Config {config}\nSeeds: {list(per_seed.index)}\nQueries per seed: {n_per_seed.to_dict()}\n\n"
+            f"{table.round(4).to_string()}\n")
+    print(text)
+    out = os.path.join(RESULTS_DIR, f"summary_{config}.txt")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(text)
+    print("Saved", out)
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", choices=list(CONFIGS), default="A")
+    ap.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
+    ap.add_argument("--limit", type=int, default=None, help="only the first N queries (for a quick test)")
+    ap.add_argument("--summarize", action="store_true")
+    args = ap.parse_args()
+    if args.summarize:
+        summarize(args.config)
+    else:
+        run(args.config, args.seeds, args.limit)
