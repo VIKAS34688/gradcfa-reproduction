@@ -1,0 +1,14 @@
+Config B
+Seeds: [42]
+Queries per seed: {42: 15}
+
+                  mean  std_across_seeds  paper (GradCFA, Credit)
+prox            0.2079               NaN                     0.15
+spars           0.2240               NaN                     0.18
+plaus_eq5_k3    0.5067               NaN                     0.37
+plaus_raw_k3    1.8807               NaN                      NaN
+div             0.9059               NaN                     0.96
+conf            0.6277               NaN                     0.78
+valid_frac      0.8000               NaN                      NaN
+avg5            0.7190               NaN                     0.81
+seconds       116.2753               NaN                      NaN
