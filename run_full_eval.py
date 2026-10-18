@@ -8,8 +8,10 @@ Run from the repository root (the folder containing `src`, `datasets` and `pytor
     python run_full_eval.py --config A --summarize              # print mean +/- std table
 
 Design choices (document these in your report):
-  * The black-box model is NOT retrained. It is loaded from `pytorch_model.pth`, which the
-    notebook created with SEED = 42. Only the counterfactual generation uses the other seeds.
+  * The black-box model is NOT retrained here. It is loaded from `pytorch_model_di.pth`, created by
+    check_and_train_di.py in the SAME encoding space that DataInterface (and so GradCFA) feeds the
+    model. Only the counterfactual generation uses the other seeds.
+  * Results go to `results_di/` (the older `results/` folder came from the notebook's mismatched pipeline).
   * Queries = every test-set row (20% split, random_state=42) that the model predicts as class 0
     (rejected). The target class is 1 (approved).
   * Each query gets its own seed (seed * 1000 + row_id), so a resumed run gives the same results.
@@ -45,11 +47,10 @@ from model.Model_Interface import ModelInterface
 from cf.GradCFA import DiPACE_FA
 from eval.Evaluation import Evaluate
 
-MODEL_PATH = "pytorch_model.pth"
-EXPECTED_ACC = 0.8260869565217391   # test accuracy printed by the notebook with SEED = 42
+MODEL_PATH = "pytorch_model_di.pth"
 N_CF = 5
 K = 3
-RESULTS_DIR = "results"
+RESULTS_DIR = "results_di"
 
 CAT_COLS = ['Gender', 'Married', 'BankCustomer', 'Industry', 'Ethnicity', 'PriorDefault',
             'CreditScore', 'Employed', 'DriversLicense', 'Citizen']
@@ -69,6 +70,10 @@ CONFIGS = {
     # approximations of the paper's ablations (use later, Days 8-9)
     "A_nopert": dict(PAPER_HYPERPARAMS, high_loss_threshold=1e9),   # perturbation never triggers
     "A_nopen": dict(PAPER_HYPERPARAMS, penalty_scale=0.0),          # no additional penalty
+    # Same as A but loss_converge_maxiter=1, so that the perturb-and-retry step actually runs
+    "C": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1),
+    "C_nopert": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1, high_loss_threshold=1e9),
+    "C_nopen": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1, penalty_scale=0.0),
 }
 
 PAPER_ROW = {"prox": 0.15, "spars": 0.18, "plaus_eq5_k3": 0.37, "div": 0.96, "conf": 0.78, "avg5": 0.81}
@@ -81,46 +86,42 @@ def seed_all(s):
 
 
 def prepare():
-    """Rebuild the data pipeline exactly as in binary_notebook.ipynb and load the saved model."""
+    """Build the DataInterface encoding space (the one GradCFA really feeds the model) and load the model."""
     df = pd.read_csv("datasets/credit.csv").drop(columns="ZipCode")
     for col in ["Industry", "Ethnicity", "Citizen"]:
         df[col] = LabelEncoder().fit_transform(df[col])
-
-    X = df.drop(columns=["Approved"])
     y = df["Approved"]
-    X = pd.get_dummies(X, columns=CAT_COLS)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    scaler = StandardScaler()
-    X_train_s = scaler.fit_transform(X_train)
-    X_test_s = scaler.transform(X_test)
-    X_all_s = scaler.transform(X)
-    input_size = X_train_s.shape[1]
+    d = DataInterface(dataframe=df, target="Approved", continuous_features=CONT_COLS)
+    Z = d.norm_encoded_features
+    input_size = Z.shape[1]
+    Z_train, Z_test, y_train, y_test = train_test_split(Z, y, test_size=0.2, random_state=42)
 
     model = Model(input_size)
     model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
     model.eval()
 
     with torch.no_grad():
-        acc = ((model(torch.tensor(X_test_s, dtype=torch.float32)) >= 0.5).float().view(-1)
-               == torch.tensor(y_test.values, dtype=torch.float32)).float().mean().item()
-        probs_all = model(torch.tensor(X_all_s, dtype=torch.float32)).view(-1)
-    pred_all = (probs_all >= 0.5).long().numpy()
+        pred_test = (model(torch.tensor(Z_test.to_numpy(dtype=np.float32))) >= 0.5).float().view(-1)
+        acc = (pred_test == torch.tensor(y_test.values, dtype=torch.float32)).float().mean().item()
+        pred_all = (model(torch.tensor(Z.to_numpy(dtype=np.float32))) >= 0.5).long().view(-1).numpy()
 
-    d = DataInterface(dataframe=df, target="Approved", continuous_features=CONT_COLS)
     m = ModelInterface(model_path=MODEL_PATH, input_size=input_size)
-    obs = torch.tensor(d.norm_encoded_features.to_numpy(), dtype=torch.float)
+    obs = torch.tensor(Z.to_numpy(dtype=np.float32), dtype=torch.float)
 
-    positions = X.index.get_indexer(X_test.index)
+    positions = Z.index.get_indexer(Z_test.index)
     queries = []
-    for row_id, pos in zip(X_test.index, positions):
+    for row_id, pos in zip(Z_test.index, positions):
         if pred_all[pos] == 0:
             queries.append((int(row_id), df.loc[row_id].drop("Approved").to_list()))
 
-    print(f"Test rows: {len(X_test)} | predicted class 0 (queries): {len(queries)} | model test accuracy: {acc:.6f}")
-    if abs(acc - EXPECTED_ACC) > 1e-6:
-        print("WARNING: this model differs from the notebook model (expected accuracy "
-              f"{EXPECTED_ACC:.6f}). Re-run the notebook training cells and save pytorch_model.pth again.")
+    print(f"Test rows: {len(Z_test)} | predicted class 0 (queries): {len(queries)} | model test accuracy: {acc:.6f}")
+    meta = os.path.join(RESULTS_DIR, "model_di_meta.txt")
+    if os.path.exists(meta):
+        expected = float(open(meta, encoding="utf-8").read().strip())
+        if abs(acc - expected) > 1e-6:
+            print(f"WARNING: accuracy differs from the one saved at training time ({expected:.6f}). "
+                  "Re-run check_and_train_di.py.")
     return dict(d=d, m=m, model=model, obs=obs, queries=queries)
 
 
@@ -160,6 +161,8 @@ def run(config, seeds, limit):
     out_csv = os.path.join(RESULTS_DIR, f"full_{config}.csv")
     fa_csv = os.path.join(RESULTS_DIR, f"fa_{config}.csv")
     err_txt = os.path.join(RESULTS_DIR, f"errors_{config}.txt")
+    cf_dir = os.path.join(RESULTS_DIR, f"cfs_{config}")   # raw counterfactuals, so metrics can be recomputed later
+    os.makedirs(cf_dir, exist_ok=True)
 
     done = set()
     if os.path.exists(out_csv):
@@ -181,6 +184,7 @@ def run(config, seeds, limit):
                     q, cfs = exp.generate_counterfactuals(ql, total_CFs=N_CF, **kwargs)
                 plt.close("all")
                 row = metrics_for(ctx, ev, q, cfs)
+                np.savez_compressed(os.path.join(cf_dir, f"s{seed}_r{rid}.npz"), q=np.asarray(q), cfs=np.asarray(cfs))
                 row.update(config=config, seed=seed, row_id=rid, seconds=round(time.time() - t0, 2))
                 pd.DataFrame([row]).to_csv(out_csv, mode="a", header=not os.path.exists(out_csv), index=False)
 
