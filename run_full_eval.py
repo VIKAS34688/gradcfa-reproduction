@@ -6,14 +6,16 @@ Run from the repository root (the folder containing `src`, `datasets` and `pytor
     python run_full_eval.py --config A --seeds 42 --limit 3     # quick test (3 queries)
     python run_full_eval.py --config A --seeds 42 43 44         # full run, 3 seeds
     python run_full_eval.py --config A --summarize              # print mean +/- std table
+    python run_full_eval.py --config A --which all              # all 138 test rows (target = opposite class)
 
 Design choices (document these in your report):
   * The black-box model is NOT retrained here. It is loaded from `pytorch_model_di.pth`, created by
     check_and_train_di.py in the SAME encoding space that DataInterface (and so GradCFA) feeds the
     model. Only the counterfactual generation uses the other seeds.
   * Results go to `results_di/` (the older `results/` folder came from the notebook's mismatched pipeline).
-  * Queries = every test-set row (20% split, random_state=42) that the model predicts as class 0
-    (rejected). The target class is 1 (approved).
+  * Queries (default, --which neg) = every test-set row (20% split, random_state=42) that the model
+    predicts as class 0 (rejected); the target class is 1 (approved). With --which all, every test
+    row is used and the target is the opposite of the model's prediction (files get an `_all` suffix).
   * Each query gets its own seed (seed * 1000 + row_id), so a resumed run gives the same results.
   * Plausibility is reported two ways: the repo's raw k-NN distance, and the paper's Eq. 5
     (distances scaled by the min and max among the k nearest points). k = 3 (repo default;
@@ -74,6 +76,8 @@ CONFIGS = {
     "C": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1),
     "C_nopert": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1, high_loss_threshold=1e9),
     "C_nopen": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1, penalty_scale=0.0),
+    # Both perturbation and penalty off (cheap): lets us separate the effect of each one
+    "C_nopert_nopen": dict(PAPER_HYPERPARAMS, loss_converge_maxiter=1, high_loss_threshold=1e9, penalty_scale=0.0),
 }
 
 PAPER_ROW = {"prox": 0.15, "spars": 0.18, "plaus_eq5_k3": 0.37, "div": 0.96, "conf": 0.78, "avg5": 0.81}
@@ -85,7 +89,7 @@ def seed_all(s):
     torch.manual_seed(s)
 
 
-def prepare():
+def prepare(which="neg"):
     """Build the DataInterface encoding space (the one GradCFA really feeds the model) and load the model."""
     df = pd.read_csv("datasets/credit.csv").drop(columns="ZipCode")
     for col in ["Industry", "Ethnicity", "Citizen"]:
@@ -112,10 +116,13 @@ def prepare():
     positions = Z.index.get_indexer(Z_test.index)
     queries = []
     for row_id, pos in zip(Z_test.index, positions):
-        if pred_all[pos] == 0:
-            queries.append((int(row_id), df.loc[row_id].drop("Approved").to_list()))
+        pred = int(pred_all[pos])
+        if which == "neg" and pred != 0:
+            continue
+        # target class = the opposite of the model's prediction (1 for rejected rows, 0 for approved rows)
+        queries.append((int(row_id), df.loc[row_id].drop("Approved").to_list(), 1 - pred))
 
-    print(f"Test rows: {len(Z_test)} | predicted class 0 (queries): {len(queries)} | model test accuracy: {acc:.6f}")
+    print(f"Test rows: {len(Z_test)} | queries used ({which}): {len(queries)} | model test accuracy: {acc:.6f}")
     meta = os.path.join(RESULTS_DIR, "model_di_meta.txt")
     if os.path.exists(meta):
         expected = float(open(meta, encoding="utf-8").read().strip())
@@ -135,33 +142,34 @@ def plausibility(dist, k=K):
     return raw, eq5
 
 
-def metrics_for(ctx, ev, q, cfs):
+def metrics_for(ctx, ev, q, cfs, target=1):
     q = torch.Tensor(q).float()
     c = torch.Tensor(cfs).float()
     dist = torch.cdist(c, ctx["obs"], p=1.0)
     raw, eq5 = plausibility(dist)
     with torch.no_grad():
-        valid_frac = (ctx["model"](c).view(-1) >= 0.5).float().mean().item()
+        valid_frac = ((ctx["model"](c).view(-1) >= 0.5).long() == target).float().mean().item()
     return dict(
         prox=ev.evaluate_proximity(q, c).item(),
         spars=ev.evaluate_sparsity(q, c).item(),
         div=ev.evaluate_diversity(c).item(),
         plaus_raw_k3=raw,
         plaus_eq5_k3=eq5,
-        conf=ev.evaluate_confidence(c, desired_class=1).item(),
+        conf=ev.evaluate_confidence(c, desired_class=target).item(),
         valid_frac=valid_frac,
     )
 
 
-def run(config, seeds, limit):
+def run(config, seeds, limit, which="neg"):
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    ctx = prepare()
+    ctx = prepare(which)
+    tag = config if which == "neg" else f"{config}_all"
     ev = Evaluate(ctx["d"], ctx["m"])
     kwargs = CONFIGS[config]
-    out_csv = os.path.join(RESULTS_DIR, f"full_{config}.csv")
-    fa_csv = os.path.join(RESULTS_DIR, f"fa_{config}.csv")
-    err_txt = os.path.join(RESULTS_DIR, f"errors_{config}.txt")
-    cf_dir = os.path.join(RESULTS_DIR, f"cfs_{config}")   # raw counterfactuals, so metrics can be recomputed later
+    out_csv = os.path.join(RESULTS_DIR, f"full_{tag}.csv")
+    fa_csv = os.path.join(RESULTS_DIR, f"fa_{tag}.csv")
+    err_txt = os.path.join(RESULTS_DIR, f"errors_{tag}.txt")
+    cf_dir = os.path.join(RESULTS_DIR, f"cfs_{tag}")   # raw counterfactuals, so metrics can be recomputed later
     os.makedirs(cf_dir, exist_ok=True)
 
     done = set()
@@ -172,10 +180,10 @@ def run(config, seeds, limit):
     queries = ctx["queries"][:limit] if limit else ctx["queries"]
 
     for seed in seeds:
-        todo = [(rid, ql) for rid, ql in queries if (seed, rid) not in done]
-        print(f"\n[config {config}] seed {seed}: {len(todo)} queries to run ({len(queries) - len(todo)} already done)")
+        todo = [(rid, ql, tgt) for rid, ql, tgt in queries if (seed, rid) not in done]
+        print(f"\n[config {tag}] seed {seed}: {len(todo)} queries to run ({len(queries) - len(todo)} already done)")
         t_start = time.time()
-        for i, (rid, ql) in enumerate(todo, 1):
+        for i, (rid, ql, tgt) in enumerate(todo, 1):
             t0 = time.time()
             try:
                 seed_all(seed * 1000 + rid)
@@ -183,7 +191,7 @@ def run(config, seeds, limit):
                 with contextlib.redirect_stdout(io.StringIO()):
                     q, cfs = exp.generate_counterfactuals(ql, total_CFs=N_CF, **kwargs)
                 plt.close("all")
-                row = metrics_for(ctx, ev, q, cfs)
+                row = metrics_for(ctx, ev, q, cfs, tgt)
                 np.savez_compressed(os.path.join(cf_dir, f"s{seed}_r{rid}.npz"), q=np.asarray(q), cfs=np.asarray(cfs))
                 row.update(config=config, seed=seed, row_id=rid, seconds=round(time.time() - t0, 2))
                 pd.DataFrame([row]).to_csv(out_csv, mode="a", header=not os.path.exists(out_csv), index=False)
@@ -201,12 +209,13 @@ def run(config, seeds, limit):
 
             elapsed = time.time() - t_start
             eta = elapsed / i * (len(todo) - i)
-            print(f"  [{i}/{len(todo)}] row {rid}  {time.time() - t0:5.1f}s   elapsed {elapsed / 60:5.1f} min   ETA {eta / 60:5.1f} min")
+            print(f"  [{i}/{len(todo)}] row {rid} -> class {tgt}  {time.time() - t0:5.1f}s   elapsed {elapsed / 60:5.1f} min   ETA {eta / 60:5.1f} min")
     print("\nFinished. Results in", out_csv)
 
 
-def summarize(config):
-    path = os.path.join(RESULTS_DIR, f"full_{config}.csv")
+def summarize(config, which="neg"):
+    tag = config if which == "neg" else f"{config}_all"
+    path = os.path.join(RESULTS_DIR, f"full_{tag}.csv")
     df = pd.read_csv(path)
     df["avg5"] = ((1 - df["prox"]) + (1 - df["spars"]) + (1 - df["plaus_eq5_k3"]) + df["div"] + df["conf"]) / 5
     cols = ["prox", "spars", "plaus_eq5_k3", "plaus_raw_k3", "div", "conf", "valid_frac", "avg5", "seconds"]
@@ -214,10 +223,10 @@ def summarize(config):
     n_per_seed = df.groupby("seed").size()
     table = pd.DataFrame({"mean": per_seed.mean(), "std_across_seeds": per_seed.std(ddof=1)})
     table["paper (GradCFA, Credit)"] = pd.Series(PAPER_ROW)
-    text = (f"Config {config}\nSeeds: {list(per_seed.index)}\nQueries per seed: {n_per_seed.to_dict()}\n\n"
+    text = (f"Config {tag}\nSeeds: {list(per_seed.index)}\nQueries per seed: {n_per_seed.to_dict()}\n\n"
             f"{table.round(4).to_string()}\n")
     print(text)
-    out = os.path.join(RESULTS_DIR, f"summary_{config}.txt")
+    out = os.path.join(RESULTS_DIR, f"summary_{tag}.txt")
     with open(out, "w", encoding="utf-8") as f:
         f.write(text)
     print("Saved", out)
@@ -228,9 +237,11 @@ if __name__ == "__main__":
     ap.add_argument("--config", choices=list(CONFIGS), default="A")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
     ap.add_argument("--limit", type=int, default=None, help="only the first N queries (for a quick test)")
+    ap.add_argument("--which", choices=["neg", "all"], default="neg",
+                    help="neg = test rows the model predicts as rejected (default); all = every test row (138)")
     ap.add_argument("--summarize", action="store_true")
     args = ap.parse_args()
     if args.summarize:
-        summarize(args.config)
+        summarize(args.config, args.which)
     else:
-        run(args.config, args.seeds, args.limit)
+        run(args.config, args.seeds, args.limit, args.which)
