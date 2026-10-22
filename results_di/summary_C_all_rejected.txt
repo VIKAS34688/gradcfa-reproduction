@@ -1,0 +1,14 @@
+Config C_all (subset: rejected)
+Seeds: [42]
+Queries per seed: {42: 69}
+
+                  mean  std_across_seeds  paper (GradCFA, Credit)
+prox            0.2006               NaN                     0.15
+spars           0.2202               NaN                     0.18
+plaus_eq5_k3    0.5264               NaN                     0.37
+plaus_raw_k3    1.8938               NaN                      NaN
+div             0.8999               NaN                     0.96
+conf            0.7807               NaN                     0.78
+valid_frac      0.9536               NaN                      NaN
+avg5            0.7467               NaN                     0.81
+seconds       648.5120               NaN                      NaN

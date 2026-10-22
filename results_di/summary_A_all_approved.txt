@@ -1,0 +1,14 @@
+Config A_all (subset: approved)
+Seeds: [42, 43, 44]
+Queries per seed: {42: 69, 43: 69, 44: 69}
+
+                 mean  std_across_seeds  paper (GradCFA, Credit)
+prox           0.2447            0.0023                     0.15
+spars          0.2443            0.0014                     0.18
+plaus_eq5_k3   0.5109            0.0047                     0.37
+plaus_raw_k3   2.3286            0.0320                      NaN
+div            0.8986            0.0113                     0.96
+conf           0.8875            0.0051                     0.78
+valid_frac     0.9295            0.0110                      NaN
+avg5           0.7572            0.0018                     0.81
+seconds       70.1044           22.3662                      NaN
