@@ -7,6 +7,7 @@ Run from the repository root (the folder containing `src`, `datasets` and `pytor
     python run_full_eval.py --config A --seeds 42 43 44         # full run, 3 seeds
     python run_full_eval.py --config A --summarize              # print mean +/- std table
     python run_full_eval.py --config A --which all              # all 138 test rows (target = opposite class)
+    python run_full_eval.py --config C --which all --summarize --subset rejected   # summary over the 69 rejected rows only
 
 Design choices (document these in your report):
   * The black-box model is NOT retrained here. It is loaded from `pytorch_model_di.pth`, created by
@@ -213,20 +214,24 @@ def run(config, seeds, limit, which="neg"):
     print("\nFinished. Results in", out_csv)
 
 
-def summarize(config, which="neg"):
+def summarize(config, which="neg", subset="all"):
     tag = config if which == "neg" else f"{config}_all"
     path = os.path.join(RESULTS_DIR, f"full_{tag}.csv")
     df = pd.read_csv(path)
+    if subset != "all":
+        # rows the model predicts as rejected = the query rows of the default (neg) run of config A
+        rejected_ids = set(pd.read_csv(os.path.join(RESULTS_DIR, "full_A.csv"))["row_id"].astype(int))
+        df = df[df["row_id"].isin(rejected_ids)] if subset == "rejected" else df[~df["row_id"].isin(rejected_ids)]
     df["avg5"] = ((1 - df["prox"]) + (1 - df["spars"]) + (1 - df["plaus_eq5_k3"]) + df["div"] + df["conf"]) / 5
     cols = ["prox", "spars", "plaus_eq5_k3", "plaus_raw_k3", "div", "conf", "valid_frac", "avg5", "seconds"]
     per_seed = df.groupby("seed")[cols].mean()
     n_per_seed = df.groupby("seed").size()
     table = pd.DataFrame({"mean": per_seed.mean(), "std_across_seeds": per_seed.std(ddof=1)})
     table["paper (GradCFA, Credit)"] = pd.Series(PAPER_ROW)
-    text = (f"Config {tag}\nSeeds: {list(per_seed.index)}\nQueries per seed: {n_per_seed.to_dict()}\n\n"
+    text = (f"Config {tag} (subset: {subset})\nSeeds: {list(per_seed.index)}\nQueries per seed: {n_per_seed.to_dict()}\n\n"
             f"{table.round(4).to_string()}\n")
     print(text)
-    out = os.path.join(RESULTS_DIR, f"summary_{tag}.txt")
+    out = os.path.join(RESULTS_DIR, f"summary_{tag}.txt" if subset == "all" else f"summary_{tag}_{subset}.txt")
     with open(out, "w", encoding="utf-8") as f:
         f.write(text)
     print("Saved", out)
@@ -239,9 +244,11 @@ if __name__ == "__main__":
     ap.add_argument("--limit", type=int, default=None, help="only the first N queries (for a quick test)")
     ap.add_argument("--which", choices=["neg", "all"], default="neg",
                     help="neg = test rows the model predicts as rejected (default); all = every test row (138)")
+    ap.add_argument("--subset", choices=["all", "rejected", "approved"], default="all",
+                    help="with --summarize: restrict the summary to rows the model rejects / approves")
     ap.add_argument("--summarize", action="store_true")
     args = ap.parse_args()
     if args.summarize:
-        summarize(args.config, args.which)
+        summarize(args.config, args.which, args.subset)
     else:
         run(args.config, args.seeds, args.limit, args.which)
