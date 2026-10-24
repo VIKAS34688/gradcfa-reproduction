@@ -99,3 +99,5 @@ All credit for GradCFA and DiPACE goes to the original authors. Please cite thei
   doi       = {10.5220/0013219100003890}
 }
 ```
+## Reproducing Phase 2
+Unzip `results_di/saved_counterfactuals.zip` into `results_di/`, then run `python phase2_attribution.py`.
