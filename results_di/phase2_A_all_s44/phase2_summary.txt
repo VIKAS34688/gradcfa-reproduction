@@ -1,0 +1,43 @@
+Phase 2 summary (A_all): 135 queries with at least one valid counterfactual
+95% intervals are bootstrap over queries.
+
+Agreement between rankings (random: Spearman 0, top-1 0.071, top-3 overlap 0.214)
+metric              kendall  spearman   top1   top3
+pair                                               
+GradCFA vs Path-IG    0.115     0.136  0.022  0.363
+GradCFA vs Shapley    0.187     0.290  0.030  0.343
+Path-IG vs Shapley    0.499     0.612  0.926  0.793
+
+T1_ablation_drop: mean over k=1..13 (higher = more faithful ranking)
+  GradCFA       avg 0.2843 [0.2651, 0.3027]   k=1 0.0182   k=3 0.1057
+  Shapley       avg 0.3628 [0.3399, 0.3841]   k=1 0.2441   k=3 0.3498
+  Path-IG       avg 0.3733 [0.3570, 0.3891]   k=1 0.2623   k=3 0.3643
+  Largest edit  avg 0.3305 [0.3133, 0.3470]   k=1 0.0614   k=3 0.2692
+  Random        avg 0.1940 [0.1820, 0.2054]   k=1 0.0247   k=3 0.0801
+  paired Shapley - GradCFA: +0.0786 [+0.0712, +0.0855]
+  paired Path-IG - GradCFA: +0.0890 [+0.0784, +0.1005]
+  paired Largest edit - GradCFA: +0.0463 [+0.0334, +0.0595]
+  paired Path-IG - Shapley: +0.0104 [-0.0010, +0.0235]
+
+T2_reversal_drop: mean over k=1..13 (higher = more faithful ranking)
+  GradCFA       avg 0.5558 [0.5297, 0.5791]   k=1 0.0227   k=3 0.2230
+  Shapley       avg 0.6827 [0.6543, 0.7079]   k=1 0.5017   k=3 0.6511
+  Path-IG       avg 0.7045 [0.6778, 0.7284]   k=1 0.5206   k=3 0.6758
+  Largest edit  avg 0.6305 [0.6049, 0.6545]   k=1 0.1370   k=3 0.5331
+  Random        avg 0.3776 [0.3598, 0.3945]   k=1 0.0496   k=3 0.1574
+  paired Shapley - GradCFA: +0.1269 [+0.1164, +0.1377]
+  paired Path-IG - GradCFA: +0.1487 [+0.1391, +0.1585]
+  paired Largest edit - GradCFA: +0.0747 [+0.0606, +0.0874]
+  paired Path-IG - Shapley: +0.0218 [+0.0159, +0.0287]
+
+T2_reversal_flip_rate: mean over k=1..13 (higher = more faithful ranking)
+  GradCFA       avg 0.7290 [0.7030, 0.7548]   k=1 0.0311   k=3 0.3056
+  Shapley       avg 0.8916 [0.8625, 0.9183]   k=1 0.6307   k=3 0.8419
+  Path-IG       avg 0.9296 [0.9114, 0.9470]   k=1 0.6591   k=3 0.8719
+  Largest edit  avg 0.8414 [0.8202, 0.8615]   k=1 0.2079   k=3 0.7096
+  Random        avg 0.5073 [0.4872, 0.5275]   k=1 0.0765   k=3 0.2228
+  paired Shapley - GradCFA: +0.1626 [+0.1460, +0.1794]
+  paired Path-IG - GradCFA: +0.2006 [+0.1855, +0.2163]
+  paired Largest edit - GradCFA: +0.1124 [+0.0930, +0.1320]
+  paired Path-IG - Shapley: +0.0381 [+0.0249, +0.0544]
+
