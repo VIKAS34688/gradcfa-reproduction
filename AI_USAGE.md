@@ -39,5 +39,8 @@
 | 2026-10-10 | Seed cell and reproducibility check | Added the seed cell and verified it on two runs |
 | 2026-10-11 to 2026-10-12 | Script to run GradCFA over the whole test set, ablation configs | Ran it on my laptop, checked the CSV results against the paper's table |
 | 2026-10-18 | Column-order mismatch between notebook and DataInterface, retraining script | Ran the check myself, retrained the model, reran Config A |
+| 2026-10-19 to 2026-10-21 | Runs over all 138 test rows, full method with perturbation, ablation grid | Ran them on my laptop, compared the summaries with the paper's table |
+| 2026-10-22 to 2026-10-24 | Phase 2 design and script (exact Shapley values, Path-IG, two faithfulness tests) | Ran the diagnostic and the cross-check against the shap library, ran the analysis on my results and on three perturbation-off seeds |
+| 2026-10-25 to 2026-10-26 | Fixed-feature regeneration test (script, memory error during a long run) | Ran it on my laptop in several resumed parts, checked the counts and the summary myself |
 
 Add one row for every new session.

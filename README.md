@@ -14,12 +14,11 @@ The code in this repository is the authors' official implementation (https://git
 | Fixed random seed (SEED = 42), checked on two runs | Done |
 | GradCFA on all test queries (72 queries), Credit Approval: Config A (3 seeds), Config B (1 seed), ablation variants (3 seeds), notebook pipeline | Done, results in `results/` |
 | Input-space mismatch in the notebook pipeline found, model retrained in DataInterface space | Done (`check_and_train_di.py`, test accuracy 0.833) |
-| Config A rerun in the corrected pipeline (3 seeds) | Done, results in `results_di/` |
-| Ablation reruns in the corrected pipeline, SHAP baseline | Not started |
-| Obesity (multi-class) | Not started (if time permits) |
-| Phase 2 extension | Not started |
+| Corrected pipeline, all 138 test rows: Config A (3 seeds), full method with perturbation and penalty (1 seed), ablation grid on the 69 rejected rows | Done, results in `results_di/`, tables in `PHASE1_RESULTS.md` |
+| Phase 2: faithfulness of GradCFA's feature attribution (exact Shapley values, three faithfulness tests including fixed-feature regeneration, Path-IG alternative), full method plus three perturbation-off seeds | Done, `phase2_attribution.py`, `phase2_regen.py`, results in `results_di/phase2_*`, write-up in `PHASE2_RESULTS.md` |
+| Obesity and Fetal Health datasets; Wachter, DiCE and CARE baselines; the paper's fixed-feature regeneration test | Not reproduced (time) |
 
-Results are reported with the number of queries and seeds stated. They do not match the paper's Table II; see the analysis in the Phase 1 summary (to be added).
+Results are reported with the number of queries and seeds stated. They do not match the paper's Table II; see `PHASE1_RESULTS.md` for the analysis.
 
 ## Repository contents
 
@@ -27,6 +26,11 @@ Results are reported with the number of queries and seeds stated. They do not ma
 - `requirements.txt`: package versions used (added by us)
 - `run_full_eval.py`: runs GradCFA on every test query that the model predicts as class 0, for several seeds, and writes metrics to CSV
 - `check_and_train_di.py`: measures the input-space mismatch and retrains the model in DataInterface space
+- `phase2_attribution.py`: Phase 2 analysis of GradCFA's feature attribution (exact Shapley values, agreement, two faithfulness tests, Path-IG alternative)
+- `phase2_regen.py`: Phase 2 test T3, regenerates counterfactuals with the top-ranked features fixed
+- `diagnose_model.py`: checks that the numpy copy of the model used in Phase 2 matches the torch model
+- `recompute_plausibility.py`: plausibility sensitivity analysis from the saved counterfactuals
+- `PHASE1_RESULTS.md`, `PHASE2_RESULTS.md`: result tables and write-ups
 - `results/`: results from the original notebook pipeline (model trained on a different column order and scaling than the counterfactual code uses)
 - `results_di/`: results from the corrected pipeline (`pytorch_model_di.pth`)
 - `AI_USAGE.md`: disclosure of AI tool use
@@ -99,5 +103,3 @@ All credit for GradCFA and DiPACE goes to the original authors. Please cite thei
   doi       = {10.5220/0013219100003890}
 }
 ```
-## Reproducing Phase 2
-Unzip `results_di/saved_counterfactuals.zip` into `results_di/`, then run `python phase2_attribution.py`.
