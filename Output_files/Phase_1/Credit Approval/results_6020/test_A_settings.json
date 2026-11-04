@@ -1,0 +1,1 @@
+{"proximity_weight": 0.5, "sparsity_weight": 0.5, "plausibility_weight": 0.5, "diversity_weight": 0.5, "penalty_scale": 0.1, "perturb_scale": 0.5, "proximity_threshold": 0.2, "sparsity_threshold": 0.2, "plausibility_threshold": 0.4, "diversity_threshold": 0.9, "high_loss_threshold": 0.5, "loss_converge_maxiter": 2}
