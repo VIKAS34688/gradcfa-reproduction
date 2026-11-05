@@ -1,0 +1,8 @@
+              Diagnostic (Random Init, N=20)  Phase 1 (Query Init, N=368)  Paper (GradCFA, Obesity)
+prox                                  0.4316                       0.0994                      0.21
+spars                                 0.4200                       0.2494                      0.23
+plaus_eq5_k3                          0.4834                       0.4965                      0.34
+div                                   0.8748                       0.3069                      0.92
+conf                                  0.6792                       0.6162                      0.76
+valid_frac                            1.0000                       0.9136                       NaN
+avg5                                  0.6438                       0.6156                      0.78

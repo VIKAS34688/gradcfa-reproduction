@@ -1,0 +1,45 @@
+=== Obesity Corrected Pipeline (init_near_query_instance = False, full scale) ===
+Files: ['full_corrected_s0of6.csv', 'full_corrected_s1of6.csv', 'full_corrected_s2of6.csv', 'full_corrected_s3of6.csv', 'full_corrected_s4of6.csv', 'full_corrected_s5of6.csv']
+Seeds: [42] | total unique queries: 368
+Share of queries with no valid counterfactual: 0.000
+
+                 mean  std_across_seeds  paper (GradCFA, Obesity)
+prox           0.4068               NaN                      0.21
+spars          0.4144               NaN                      0.23
+plaus_eq5_k3   0.4950               NaN                      0.34
+plaus_raw_k3   2.3642               NaN                       NaN
+div            0.8464               NaN                      0.92
+conf           0.6640               NaN                      0.76
+valid_frac     0.9815               NaN                       NaN
+avg5           0.6388               NaN                      0.78
+seconds       27.1257               NaN                       NaN
+
+Per original class (class the model predicts), mean over queries:
+            n_rows   prox  spars  plaus_eq5_k3    div   conf  valid_frac   avg5
+orig_class                                                                     
+0               60  0.440  0.455         0.502  0.852  0.672       0.990  0.625
+2               76  0.424  0.410         0.495  0.847  0.658       0.976  0.635
+3               60  0.371  0.383         0.492  0.831  0.655       0.983  0.648
+4               63  0.396  0.396         0.492  0.847  0.670       0.987  0.646
+5               60  0.405  0.429         0.493  0.857  0.672       0.980  0.640
+6               49  0.399  0.415         0.495  0.844  0.657       0.971  0.639
+
+Feature attribution (GradCFA's own scores), paper: Weight first, then MTRANS:
+         mean_score  mean_rank  top1_share
+feature                                   
+Weight       0.6144     1.0000         1.0
+MTRANS       0.1197     2.2446         0.0
+Height       0.0864     4.9103         0.0
+CAEC         0.0776     4.9158         0.0
+SMOKE        0.0758     5.1848         0.0
+CALC         0.0735     5.5082         0.0
+Gender       0.0737     5.6168         0.0
+SCC          0.0553     7.8152         0.0
+FHWO         0.0397    10.1141         0.0
+FAVC         0.0370    10.6033         0.0
+Age          0.0331    11.4375         0.0
+CH2O         0.0331    11.4484         0.0
+FCVC         0.0284    12.3804         0.0
+FAF          0.0207    13.9266         0.0
+TUE          0.0190    14.1739         0.0
+NCP          0.0167    14.7201         0.0

@@ -1,0 +1,19 @@
+{
+  "proximity_weight": 1.5,
+  "sparsity_weight": 1.0,
+  "plausibility_weight": 0.5,
+  "diversity_weight": 0.5,
+  "penalty_scale": 0.1,
+  "perturb_scale": 0.5,
+  "proximity_threshold": 0.35,
+  "sparsity_threshold": 0.35,
+  "plausibility_threshold": 0.5,
+  "diversity_threshold": 0.9,
+  "problem_type": "multiclass",
+  "desired_value": 0,
+  "min_iter": 500,
+  "max_iter": 2000,
+  "init_near_query_instance": false,
+  "high_loss_threshold": 1000000000.0,
+  "loss_converge_maxiter": 2
+}

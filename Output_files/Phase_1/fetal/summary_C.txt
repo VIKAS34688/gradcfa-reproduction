@@ -1,0 +1,40 @@
+======================================================================
+GradCFA Reproduction Summary: Fetal Health (Config C)
+Seeds: [42] | Total rows in CSV: 71
+Queries per seed: {42: 71}
+======================================================================
+
+OVERALL METRICS TABLE:
+                 mean  std_across_seeds  paper (GradCFA, Fetal)
+prox           0.6550               NaN                    0.34
+spars          0.5728               NaN                    0.35
+plaus_eq5_k3   0.5131               NaN                    0.42
+plaus_raw_k3   1.5461               NaN                     NaN
+div            0.8602               NaN                    0.96
+conf           0.9578               NaN                    0.79
+valid_frac     0.9972               NaN                     NaN
+avg5           0.6154               NaN                    0.73
+seconds       20.7076               NaN                     NaN
+
+
+PER ORIGINAL CLASS (pred_class) BREAKDOWN:
+              prox   spars  plaus_eq5_k3  plaus_raw_k3     div    conf  valid_frac    avg5  seconds
+pred_class                                                                                         
+1           0.5633  0.5672        0.5179        1.5885  0.8397  0.9599      1.0000  0.6302   8.6667
+2           0.8592  0.5853        0.5026        1.4517  0.9058  0.9532      0.9909  0.5824  47.5259
+
+
+TOP 10 ATTRIBUTED FEATURES (mean score):
+feature
+DP      0.0690
+ALTV    0.0660
+E       0.0602
+SUSP    0.0598
+LD      0.0598
+FS      0.0575
+C       0.0540
+A       0.0515
+DE      0.0513
+D       0.0511
+
+Paper top features: D, then A

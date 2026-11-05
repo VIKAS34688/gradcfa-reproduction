@@ -1,0 +1,17 @@
+=== Table VII Reproduction: Fixed-Feature Test on Obesity (Feature: Weight) ===
+Queries evaluated: 368 | Seed: [np.int64(42)]
+
+Baseline Validity (Phase 1, Weight free):     0.9815
+Fixed-Feature Validity (Weight locked):       0.5668
+Validity Drop:                                        0.4147
+Paper's Fixed-Feature Validity (Table VII):           0.1800
+
+--- Per Original Class Breakdown ---
+            n_queries  valid_baseline  valid_fixed  conf_baseline  conf_fixed  validity_drop
+orig_class                                                                                  
+0                  60          0.9900       0.8700         0.6725      0.6427         0.1200
+2                  76          0.9763       0.4947         0.6581      0.4105         0.4816
+3                  60          0.9833       0.3600         0.6553      0.2845         0.6233
+4                  63          0.9873       0.2571         0.6696      0.2133         0.7302
+5                  60          0.9800       0.7833         0.6716      0.5594         0.1967
+6                  49          0.9714       0.6939         0.6570      0.4932         0.2776

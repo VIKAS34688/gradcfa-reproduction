@@ -1,0 +1,67 @@
+{
+  "dataset": "Obesity Levels (UCI DOI 10.24432/C5H31Z)",
+  "problem_type": "multiclass",
+  "num_classes": 7,
+  "target_class": 1,
+  "target_class_name": "Normal_Weight",
+  "model_architecture": "64-32 MLP with Softmax",
+  "model_accuracies": {
+    "train": 0.9408,
+    "validation": 0.9076,
+    "test": 0.9031
+  },
+  "paper_model_accuracies": {
+    "train": 0.90,
+    "validation": 0.84,
+    "test": 0.85
+  },
+  "paper_hyperparameters": {
+    "proximity_weight": 0.5,
+    "sparsity_weight": 0.5,
+    "plausibility_weight": 0.5,
+    "diversity_weight": 0.5,
+    "penalty_scale": 0.1,
+    "perturb_scale": 0.5,
+    "proximity_threshold": 0.3,
+    "sparsity_threshold": 0.3,
+    "plausibility_threshold": 0.4,
+    "diversity_threshold": 0.4,
+    "high_loss_threshold": 0.4
+  },
+  "config_C_nopert_before_settings": {
+    "description": "Original default run (init_near_query_instance = True) resulting in low diversity (0.31)",
+    "proximity_weight": 0.5,
+    "sparsity_weight": 0.5,
+    "plausibility_weight": 0.5,
+    "diversity_weight": 0.5,
+    "penalty_scale": 0.1,
+    "perturb_scale": 0.5,
+    "proximity_threshold": 0.3,
+    "sparsity_threshold": 0.3,
+    "plausibility_threshold": 0.4,
+    "diversity_threshold": 0.4,
+    "high_loss_threshold": 1000000000.0,
+    "loss_converge_maxiter": 1,
+    "init_near_query_instance": true,
+    "total_CFs": 5,
+    "seed": 42
+  },
+  "config_corrected_settings": {
+    "description": "Corrected run (init_near_query_instance = False, random init) restoring diversity to 0.85",
+    "proximity_weight": 0.5,
+    "sparsity_weight": 0.5,
+    "plausibility_weight": 0.5,
+    "diversity_weight": 0.5,
+    "penalty_scale": 0.1,
+    "perturb_scale": 0.5,
+    "proximity_threshold": 0.3,
+    "sparsity_threshold": 0.3,
+    "plausibility_threshold": 0.4,
+    "diversity_threshold": 0.4,
+    "high_loss_threshold": 1000000000.0,
+    "loss_converge_maxiter": 1,
+    "init_near_query_instance": false,
+    "total_CFs": 5,
+    "seed": 42
+  }
+}

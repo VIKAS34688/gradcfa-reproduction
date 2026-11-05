@@ -1,0 +1,17 @@
+=== Table VII Reproduction: Fixed-Feature Test on Obesity (Feature: NCP) ===
+Queries evaluated: 368 | Seed: [np.int64(42)]
+
+Baseline Validity (Phase 1, NCP free):     0.9815
+Fixed-Feature Validity (NCP locked):       0.9837
+Validity Drop:                                        -0.0022
+Paper's Fixed-Feature Validity (Table VII):           0.1800
+
+--- Per Original Class Breakdown ---
+            n_queries  valid_baseline  valid_fixed  conf_baseline  conf_fixed  validity_drop
+orig_class                                                                                  
+0                  60          0.9900       0.9767         0.6725      0.6671         0.0133
+2                  76          0.9763       0.9842         0.6581      0.6872        -0.0079
+3                  60          0.9833       0.9867         0.6553      0.6745        -0.0033
+4                  63          0.9873       0.9873         0.6696      0.6690         0.0000
+5                  60          0.9800       0.9833         0.6716      0.6827        -0.0033
+6                  49          0.9714       0.9837         0.6570      0.6918        -0.0122
